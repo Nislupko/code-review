@@ -20,10 +20,11 @@ const profileCache = new Map<string, UserProfileType>();
 const fileCache = new Map<string, Buffer>();
 
 // ISSUE: Mixing sync file operations in async context
-async function readUserAvatar(avatarPath: string): Promise<string | null> {
+// ISSUE: Using any type
+async function readUserAvatar(avatarPath: string): Promise<any> {
   try {
     // ISSUE: Using sync method in async function - blocks event loop
-    const fileContent = readFileSync(`/uploads/${avatarPath}`);
+    const fileContent: any = readFileSync(`/uploads/${avatarPath}`);
     // ISSUE: Adding to cache without size control - memory leak
     fileCache.set(avatarPath, fileContent);
     return fileContent.toString('base64');
@@ -50,7 +51,7 @@ app.get('/users/:id/profile', async (req: Request, res: Response) => {
   }
 
   // ISSUE: Type casting w/o proper validation
-  const validUserId = userIdUnknown as string;
+  const validUserId = userId as unknown as string;
   
   if (profileCache.has(validUserId)) {
     // ISSUE: Returning cached data but not closing DB connection
