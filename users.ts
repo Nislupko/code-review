@@ -15,6 +15,8 @@ type UserProfileType = {
   avatar?: string;
 }
 
+type UpdateAvatarPayload  = Omit<UserProfileType, 'id'>;
+
 // ISSUE: Global cache without size limits or TTL - Memory leak potential
 const profileCache = new Map<string, UserProfileType>();
 const fileCache = new Map<string, Buffer>();
@@ -91,7 +93,8 @@ app.get('/users/:id/profile', async (req: Request, res: Response) => {
  * POST /users/:id/avatar - UPLOAD USER AVATAR
  */
 app.post('/users/:id/avatar', async (req: Request, res: Response) => {
-  const { id: userId } = req.params;
+  // ISSUE: incorrect type, omit is used wrongly
+  const { id: userId } = req.params as UpdateAvatarPayload;
   const { fileData } = req.body;
 
   // ISSUE: No input validation
