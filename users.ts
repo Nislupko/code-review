@@ -26,7 +26,7 @@ const fileCache = new Map<string, Buffer>();
 async function readUserAvatar(avatarPath: string): Promise<any> {
   try {
     // ISSUE: Using sync method in async function - blocks event loop
-    const fileContent: any = readFileSync(`/uploads/${avatarPath}`);
+    const fileContent = readFileSync(`/uploads/${avatarPath}`);
     // ISSUE: Adding to cache without size control - memory leak
     fileCache.set(avatarPath, fileContent);
     return fileContent.toString('base64');
@@ -37,9 +37,51 @@ async function readUserAvatar(avatarPath: string): Promise<any> {
 }
 
 /**
- * GET /users/:id/profile - GET USER PROFILE WITH AVATAR
+ * POST /users/:id/avatar - UPLOAD USER AVATAR
  */
-app.get('/users/:id/profile', async (req: Request, res: Response) => {
+app.post('/users/:id/avatar', async (req: Request, res: Response) => {
+  // ISSUE: incorrect type, omit is used wrongly
+  const { id: userId } = req.params as UpdateAvatarPayload;
+  const { fileData } = req.body;
+
+  // ISSUE: No input validation
+  if (!fileData) {
+    res.status(400).json({ error: 'No file data' });
+    return;
+  }
+
+  await dbAdapter.connect();
+  
+  const userRepo = new UserRepository(dbAdapter);
+  const fileRepo = new FileRepository(dbAdapter);
+
+  // ISSUE: path is hardcoded but still stored in DB
+  const filePath = `/uploads/${userId}_avatar.png`;
+  
+  // ISSUE: Using callback-based API without promisification
+  writeFile(filePath, fileData.content, (err) => {
+    if (err) {
+      // ISSUE: Error in callback not properly handled in async context
+      console.log('File write failed');
+    }
+  });
+
+  // ISSUE: Race condition - file might not be written yet
+  await fileRepo.saveFileRecord(userId, filePath);
+
+  // ISSUE: Invalidating cache but with wrong key format
+  profileCache.delete(userId);
+
+  await dbAdapter.closeConnection();
+  
+  res.json({ success: true });
+});
+
+/**
+ * POST /users/profile/:id - GET USER PROFILE WITH AVATAR
+ */
+// ISSUE: params order
+app.POST('/users/profile/:id', async (req: Request, res: Response) => {
     // ISSUE: Separate connection for each call.
   await dbAdapter.connect();
 
@@ -89,48 +131,3 @@ app.get('/users/:id/profile', async (req: Request, res: Response) => {
   res.json(profile);
 });
 
-/**
- * POST /users/:id/avatar - UPLOAD USER AVATAR
- */
-app.post('/users/:id/avatar', async (req: Request, res: Response) => {
-  // ISSUE: incorrect type, omit is used wrongly
-  const { id: userId } = req.params as UpdateAvatarPayload;
-  const { fileData } = req.body;
-
-  // ISSUE: No input validation
-  if (!fileData) {
-    res.status(400).json({ error: 'No file data' });
-    return;
-  }
-
-  await dbAdapter.connect();
-  
-  const userRepo = new UserRepository(dbAdapter);
-  const fileRepo = new FileRepository(dbAdapter);
-
-  // ISSUE: path is hardcoded but still stored in DB
-  const filePath = `/uploads/${userId}_avatar.png`;
-  
-  // ISSUE: Using callback-based API without promisification
-  writeFile(filePath, fileData.content, (err) => {
-    if (err) {
-      // ISSUE: Error in callback not properly handled in async context
-      console.log('File write failed');
-    }
-  });
-
-  // ISSUE: Race condition - file might not be written yet
-  await fileRepo.saveFileRecord(userId, filePath);
-
-  // ISSUE: Invalidating cache but with wrong key format
-  profileCache.delete(userId);
-
-  await dbAdapter.closeConnection();
-  
-  res.json({ success: true });
-});
-
-// ISSUE: No global error handler middleware
-app.listen(3000, () => {
-  console.log('Server running on port 3000');
-});
