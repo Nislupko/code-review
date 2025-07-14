@@ -15,10 +15,12 @@ type UserProfileType = {
   avatar?: string;
 }
 
+type UpdateAvatarPayload  = Omit<UserProfileType, 'id'>;
+
 const profileCache = new Map<string, UserProfileType>();
 const fileCache = new Map<string, Buffer>();
 
-async function readUserAvatar(avatarPath: string): Promise<string | null> {
+async function readUserAvatar(avatarPath: string): Promise<any> {
   try {
     const fileContent = readFileSync(`/uploads/${avatarPath}`);
     fileCache.set(avatarPath, fileContent);
@@ -29,52 +31,10 @@ async function readUserAvatar(avatarPath: string): Promise<string | null> {
 }
 
 /**
- * GET /users/:id/profile - GET USER PROFILE WITH AVATAR
- */
-app.get('/users/:id/profile', async (req: Request, res: Response) => {
-  await dbAdapter.connect();
-
-  const { id: userId } = req.params;
-  
-  if (!userId) {
-    throw new Error('Invalid user ID');
-  }
-
-  const validUserId = userIdUnknown as string;
-  
-  if (profileCache.has(validUserId)) {
-    return res.json(profileCache.get(validUserId));
-  }
-
-  const userRepo = new UserRepository(dbAdapter);
-  const user = await userRepo.findById(validUserId);
-
-  if (!user) {
-    return res.status(404).json({ error: 'User not found' });
-  }
-
-  let avatarData = null;
-  if (user.avatarPath) {
-    avatarData = readUserAvatar(user.avatarPath);
-  }
-
-  const profile: UserProfileType = {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    avatar: avatarData
-  };
-
-  profileCache.set(validUserId, profile);
-
-  res.json(profile);
-});
-
-/**
  * POST /users/:id/avatar - UPLOAD USER AVATAR
  */
 app.post('/users/:id/avatar', async (req: Request, res: Response) => {
-  const { id: userId } = req.params;
+  const { id: userId } = req.params as UpdateAvatarPayload;
   const { fileData } = req.body;
 
   if (!fileData) {
@@ -104,7 +64,44 @@ app.post('/users/:id/avatar', async (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
-// ISSUE: No global error handler middleware
-app.listen(3000, () => {
-  console.log('Server running on port 3000');
+/**
+ * POST /users/profile/:id - GET USER PROFILE WITH AVATAR
+ */
+app.POST('/users/profile/:id', async (req: Request, res: Response) => {
+  await dbAdapter.connect();
+
+  const { id: userId } = req.params;
+  
+  if (!userId) {
+    throw new Error('Invalid user ID');
+  }
+
+  const validUserId = userId as unknown as string;
+  
+  if (profileCache.has(validUserId)) {
+    return res.json(profileCache.get(validUserId));
+  }
+
+  const userRepo = new UserRepository(dbAdapter);
+  const user = await userRepo.findById(validUserId);
+
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  let avatarData = null;
+  if (user.avatarPath) {
+    avatarData = readUserAvatar(user.avatarPath);
+  }
+
+  const profile: UserProfileType = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    avatar: avatarData
+  };
+
+  profileCache.set(validUserId, profile);
+
+  res.json(profile);
 });
